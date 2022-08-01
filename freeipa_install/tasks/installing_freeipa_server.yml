@@ -1,0 +1,101 @@
+---
+ - name: Set linux time-zone 
+   community.general.timezone:
+     name: "{{ local_time_zone }}"
+
+
+ - name: Set a hostname
+   ansible.builtin.hostname:
+     name: "{{ host_name }}.{{ domain_name }}"
+
+
+ - name: Add hostname to /etc/hosts
+   ansible.builtin.lineinfile:
+     path: /etc/hosts
+     line: "{{ item }}"
+     owner: root
+     group: root
+     mode: '0644'
+     state: present
+   with_items:
+     - "{{ ansible_default_ipv4.address }}  {{ host_name }}.{{ domain_name }}"
+     - "{{ ansible_default_ipv4.address }}  {{ host_name }} "
+
+
+ - name: Ensure SElinux is disabled
+   ansible.builtin.lineinfile:
+     path: /etc/selinux/config
+     regexp: '^SELINUX='
+     line: SELINUX=disabled
+   register: selinux_is_enabled
+
+ - name: Disable SELinux
+   ansible.posix.selinux:
+     state: disabled
+   when: selinux_is_enabled.changed == true
+
+ - name: Reboot for appling SELinux settings
+   ansible.builtin.reboot:
+   when: selinux_is_enabled.changed == true
+
+
+ - name: Install IPA server, client, ntpd etc.
+   ansible.builtin.dnf:
+     name:
+#       - idm:DL1
+       - freeipa-server-dns
+       - ipa-server
+       - freeipa-client
+       - chrony
+       - samba 
+     state: latest
+
+ - name: Enable ntpd server
+   ansible.builtin.systemd:
+    name: chronyd
+    enabled: yes
+    masked: no
+
+ - name: check IPA status
+   ansible.builtin.shell:
+     /usr/sbin/ipactl status
+   ignore_errors: yes
+   register: ipaserver_status
+      
+
+ - name: Configure IPA
+   ansible.builtin.shell: >
+     ipa-server-install --unattended 
+     --ds-password={{ ipa_directory_manager_password }}
+     --admin-password={{ ipa_admin_password }} 
+     --ip-address={{ ansible_default_ipv4.address }} 
+     --domain={{ domain_name }} 
+     --netbios-name={{ domain_name_1 | upper }}
+     --realm={{ domain_name | upper }}
+     --hostname={{ full_host_name }}
+     --no-host-dns
+     --setup-dns 
+     --forwarder=8.8.8.8 
+     --no-revers
+   when: (ipaserver_status.stdout | regex_findall('RUNNING') | length) < 9
+
+
+ - name: Firewall (need rewrite)
+   ansible.builtin.shell:
+     firewall-cmd --add-service={freeipa-ldap,freeipa-ldaps,dns,ntp}
+
+ - name: Kinit 
+   ansible.builtin.shell:
+     echo {{ ipa_admin_password }} | kinit admin
+
+
+ - name: Adduser
+   ansible.builtin.shell:
+     echo "{{ free_ipa_password }}" | ipa user-add "{{ free_ipa_client }}" --first=test --last=test --password  
+   ignore_errors: yes    
+
+# - name: Print the gateway for each host when defined
+#   ansible.builtin.debug:
+#     var: ipaserver_status
+#     var: ipaserver_status.stdout
+#   when: (ipaserver_status.stdout | regex_findall('RUNNING') | length) == 9

@@ -1,0 +1,92 @@
+---
+
+ - name: Enable repository
+   ansible.builtin.shell:
+     cmd: dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
+     warn: false
+
+ - name: install Docker
+   ansible.builtin.dnf:
+     name:
+       - docker-ce
+       - python3
+       - python3-pip
+     state: latest
+ 
+ - name: Install docker python package
+   ansible.builtin.pip:
+     name: docker
+
+ - name: Enable docker
+   ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: yes
+    masked: no
+
+ - name: Create docker directories
+   ansible.builtin.file:
+     path: "{{ item }}"
+     state: directory
+     mode: '0755'
+   loop:
+     - "{{ build_dir_path }}"
+     - "{{ build_dir_path }}/{{ distib }}"
+
+ - name: copy files to build dir
+   ansible.builtin.copy:
+     src: "{{ item }}"
+     dest: "{{ build_dir_path }}/{{ distib }}"
+   loop:
+     - "{{ role_path }}/files/opendkim-2.10.3.tar.gz"
+     - "{{ role_path }}/files/Dockerfile"
+     - "{{ role_path }}/files/starter.sh"
+
+ - name: Build image
+   community.docker.docker_image:
+     name: "{{ distib }}-mail"
+     source: build
+     build:
+       path: "{{ build_dir_path }}/{{ distib }}"
+     tag: latest
+     state: present
+
+ - name: Create mail container
+   community.docker.docker_container:
+     name: "{{ mail_host_name }}"
+     image: "{{ distib }}-mail:latest" 
+     state: started
+     hostname: "{{ mail_host_name }}"
+     domainname: "{{ domain_name }}"
+     dns_servers: "{{ dns_servers }}"
+     restart_policy: always
+     volumes:
+       - "{{ build_dir_path }}/{{ distib }}/postfix:/etc/postfix"
+       - "{{ build_dir_path }}/{{ distib }}/opendkim:/etc/opendkim"
+     ports:
+       - "25:25"
+
+
+ - name: Get OpenDKIM data
+   ansible.builtin.shell:
+     cat {{ build_dir_path }}/{{ distib }}/opendkim/mail.txt 
+   register: dkim_public_data
+
+ - name: get DKIM body for DNS
+   ansible.builtin.set_fact:
+     dkim_dns_data_row: "{{ dkim_public_data.stdout | replace('\t',' ') | replace('\n   ','') | regex_replace('\"','') | regex_search('\\(([^()]+)\\)','\\1') | replace('[','') | replace(']','') }}"
+     
+
+ - name: Make DNS records
+   ansible.builtin.shell: |
+     ipa dnsrecord-add "{{ domain_name }}" "{{ mail_host_name }}" --a-rec "{{ ansible_default_ipv4.address }}"
+     ipa dnszone-add "{{ prt_record }}."
+     ipa dnsrecord-add "{{ prt_record }}" 1 --ptr-rec="{{ mail_host_name }}.{{ domain_name }}."
+     ipa dnsrecord-add "{{ domain_name }}" @ --mx-rec="0 {{ mail_host_name }}.{{ domain_name }}."
+     ipa dnsrecord-add "{{ domain_name }}" _spf --txt-data="v=spf1 ip4:"{{ ansible_default_ipv4.address }}" ~all"
+     ipa dnsrecord-add "{{ domain_name }}" "{{ mail_host_name }}._domainkey" --txt-data="{{ dkim_dns_data_row[2:-2] }}"
+   ignore_errors: yes  
+
+# - name: Print the gateway for each host when defined
+#   ansible.builtin.debug:
+#      msg: "{{ dkim_dns_data_row[2:-2] }}"

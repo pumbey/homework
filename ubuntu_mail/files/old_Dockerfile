@@ -1,0 +1,32 @@
+FROM ubuntu:latest
+ENV TZ=Europe/Moscow
+RUN mkdir /build && mkdir /build/postfix && mkdir /build/opendkim && mkdir /etc/opendkim 
+COPY opendkim-2.10.3.tar.gz ./build
+COPY starter.sh ./build
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
+&& apt-get -y update && apt-get install -y wget gcc build-essential libdb-dev libssl-dev libmysqlclient-dev m4 libbsd-dev libmilter-dev nano \
+&& groupadd postfix && groupadd postdrop && useradd postfix -g postfix -s /usr/sbin/nologin && useradd postdrop -g postdrop -s /usr/sbin/nologin \
+&& chmod +x /build/starter.sh \
+&& cd /build && wget --directory-prefix=/build/ https://de.postfix.org/ftpmirror/official/postfix-3.7.2.tar.gz \
+&& tar -xf /build/postfix-3.7.2.tar.gz -C /build/postfix \
+&& tar -xf /build/opendkim-2.10.3.tar.gz -C /build/opendkim \
+&& cd /build/postfix/postfix-3.7.2/ && make && make install -non-interactive \
+&& cd /build/opendkim/opendkim-2.10.3/ && ./configure --with-openssl=${prefix}/lib \
+&& cd /build/opendkim/opendkim-2.10.3/ && make && make install \
+&& ln -s /usr/local/lib/libopendkim.so.10.0.3 /usr/lib/libopendkim.so.10 \
+&& cd /build/postfix/postfix-3.7.2/ && sh postfix-install -non-interactive \
+       install_root=/ \
+       config_directory=/etc/postfix \
+       daemon_directory=/usr/libexec/postfix \
+       command_directory=/usr/sbin \
+       data_directory=/var/lib/postfix \
+       queue_directory=/var/spool/postfix \
+       sendmail_path=/usr/sbin/sendmail \
+       newaliases_path=/usr/bin/newaliases \
+       mailq_path=/usr/bin/mailq \
+       mail_owner=postfix \
+       setgid_group=postdrop \
+       manpage_directory=/usr/local/man \
+       readme_directory=no
+ENTRYPOINT ["/usr/bin/bash","/build/starter.sh"]
+

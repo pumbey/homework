@@ -1,0 +1,14 @@
+---
+build_dir_path: "/docker"
+dns_servers: ["172.17.0.1","8.8.8.8"]
+domain_name_1: "{{ domain_name.split('.')[0] }}"
+domain_name_2: "{{ domain_name.split('.')[1] }}"
+domain_name: "test.local"
+free_ipa_client: "client123"
+free_ipa_password: "password123"
+full_host_name: "{{ host_name }}.{{ domain_name }}"
+gitlab_image_ver: "latest"
+host_name: "pdc"
+ipa_admin_password: "adm_password321"
+ipa_directory_manager_password: "dm_password321"
+local_time_zone: "Europe/Moscow"
