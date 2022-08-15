@@ -127,13 +127,23 @@
      record_type: 'TXT'
      record_value: "{{ dkim_dns_data_row[2:-2] }}"
 
-#no SPF dns records in modules
+- name: SPF record
+   community.general.ipa_dnsrecord:
+     ipa_host: "{{ ipa_host_address }}"
+     ipa_pass: "{{ ipa_adm_pass }}"
+     state: present
+     zone_name: "{{ domain_name }}"
+     record_name: "_spf"
+     record_type: 'TXT'
+     record_value: "v=spf1 ip4:"{{ ansible_default_ipv4.address }}" ~all"
+
+#fix of PTR
  - name: Kinit 
    ansible.builtin.shell:
      echo "{{ ipa_adm_pass }}" | kinit admin
 
- - name: Make SPF record
-   ansible.builtin.command: ipa dnsrecord-add "{{ domain_name }}" _spf --txt-data="v=spf1 ip4:"{{ ansible_default_ipv4.address }}" ~all"
+ - name: Make ptr record
+   ansible.builtin.command: ipa dnsrecord-add "{{ prt_record }}" "{{ prt_record_suffix }}"  --ptr-rec="{{ mail_host_name }}.{{ domain_name }}."
    ignore_errors: yes  
 
 
