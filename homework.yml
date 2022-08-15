@@ -1,0 +1,10 @@
+#!/usr/bin/ansible-playbook
+---
+- name: HomeWork
+  hosts: freeipa
+  roles:
+    - install_FreeIPA
+#    - ipaserver
+    - starting_gitlab
+    - starting_nexus
+    - starting_postfix

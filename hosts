@@ -1,0 +1,17 @@
+#ansible-galaxy collection install freeipa.ansible_freeipa
+#cp -r /root/.ansible/collections/ansible_collections/freeipa/ansible_freeipa/roles/ipaserver /etc/ansible/roles/
+
+[freeipa]
+172.16.86.38
+
+[freeipa:vars]
+ipaserver_domain=test.local
+ipaserver_realm=TEST.LOCAL
+ipaadmin_password=adm_password321
+ipadm_password=dm_password321
+#ipaserver_install_packages=true
+ipaserver_setup_firewalld=false
+ipaserver_setup_dns=true
+ipaserver_no_host_dns=yes
+ipaserver_forwarders=8.8.8.8
+ipaserver_setup_firewalld=no
