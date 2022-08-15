@@ -1,0 +1,67 @@
+---
+ - name: Add signing key
+   ansible.builtin.rpm_key:
+     key: https://download.docker.com/linux/centos/gpg
+     state: present
+
+ - name: Add repository
+   ansible.builtin.yum_repository:
+     name: docker
+     description: Docker Repository
+     baseurl: "https://download.docker.com/linux/centos/$releasever/$basearch/stable"
+     enabled: true
+     gpgcheck: true
+     gpgkey: https://download.docker.com/linux/centos/gpg
+
+ - name: Epel
+   ansible.builtin.yum:
+     name:
+       - epel-release
+
+ - name: Install Docker
+   ansible.builtin.yum:
+     name:
+       - docker-ce
+       - docker-ce-cli
+       - containerd.io
+       - python3-docker
+     state: latest
+     update_cache: true
+
+ - name: Enable docker
+   ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: yes
+    masked: no
+
+ - name: Create docker directories
+   ansible.builtin.file:
+     path: "{{ item }}"
+     state: directory
+     mode: 0755
+   loop:
+     - "{{ build_dir_path }}"
+     - "{{ build_dir_path }}/nexus"
+
+ - name: Create nexus container
+   community.docker.docker_container:
+     name: nexus
+     image: sonatype/nexus3
+     state: started
+     domainname: "nexus.{{ domain_name }}"
+     dns_servers: "{{ dns_servers }}"
+     restart_policy: always
+     volumes:
+       - "{{ build_dir_path }}/nexus/etc:/nexus-data/etc/"
+     ports:
+       - "{{ docker_bridge_if }}:{{ web_port_nexus }}:{{ web_port_nexus }}"
+
+ - name: Create user for auth in FREEIPA
+   freeipa.ansible_freeipa.ipauser:
+     ipaadmin_password: "{{ ipaadmin_password }}"
+     name: "{{ free_ipa_client }}"
+     first: "{{ free_ipa_client }}"
+     last: "{{ free_ipa_client }}"
+     password: "{{ free_ipa_password }}"
+     update_password: on_create

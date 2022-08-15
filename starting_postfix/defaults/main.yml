@@ -1,0 +1,13 @@
+---
+build_dir_path: "/docker"
+distib: "ubuntu"
+dns_servers: ["172.17.0.1","8.8.8.8"]
+docker_bridge_if: "172.17.0.1"
+domain_name: "test.local"
+ipa_host_address: "pdc.{{ domain_name }}"
+ipa_adm_pass: "adm_password321"
+local_time_zone: "Europe/Moscow"
+smtp_port: 25
+smtp_server_name: "mail" 
+ptr_record: "{{ ansible_default_ipv4.address.split('.')[::-1] | join(',') |  replace(',','.') }}.in-addr.arpa"
+prt_record_suffix: "{{ ansible_default_ipv4.address.split('.')[3] }}"

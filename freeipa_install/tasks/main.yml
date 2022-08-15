@@ -1,8 +1,0 @@
- - name: Installing IPA server 
-   ansible.builtin.include_tasks: "installing_freeipa_server.yml"
-
- - name: Configuration GitLab
-   ansible.builtin.include_tasks: "gitlab.yml"
-
- - name: Configuration Nexus
-   ansible.builtin.include_tasks: "nexus.yml"

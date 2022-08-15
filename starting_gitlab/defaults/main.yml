@@ -1,0 +1,14 @@
+---
+build_dir_path: "/docker"
+dns_servers: ["172.17.0.1","8.8.8.8"]
+docker_bridge_if: "172.17.0.1"
+domain_name_1: "{{ domain_name.split('.')[0] }}"
+domain_name_2: "{{ domain_name.split('.')[1] }}"
+domain_name: "test.local"
+free_ipa_client: "client123"
+free_ipa_password: "password123"
+ipaadmin_password: "adm_password321"
+ipa_full_host_name: "{{ ipa_host_name }}.{{ domain_name }}"
+ipa_host_name: "pdc"
+smtp_server_name: "mail"
+web_port_gitlab: 180

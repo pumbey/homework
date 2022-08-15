@@ -1,0 +1,9 @@
+---
+build_dir_path: "/docker"
+dns_servers: ["172.17.0.1","8.8.8.8"]
+docker_bridge_if: "172.17.0.1"
+domain_name: "test.local"
+free_ipa_client: "nexus_ipa_user"
+free_ipa_password: "nexus_ip_pas$w0rD"
+ipaadmin_password: "adm_password321"
+web_port_nexus: 8081

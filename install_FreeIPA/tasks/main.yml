@@ -1,0 +1,61 @@
+---
+ - name: Set linux time-zone 
+   community.general.timezone:
+     name: "{{ local_time_zone }}"
+
+
+ - name: Set a hostname
+   ansible.builtin.hostname:
+     name: "{{ host_name }}.{{ domain_name }}"
+
+
+ - name: Add hostname to /etc/hosts
+   ansible.builtin.lineinfile:
+     path: /etc/hosts
+     line: "{{ item }}"
+     state: present
+   with_items:
+     - "{{ ansible_default_ipv4.address }}  {{ host_name }}.{{ domain_name }}"
+     - "{{ ansible_default_ipv4.address }}  {{ host_name }} "
+
+
+ - name: Ensure SElinux is disabled
+   ansible.builtin.lineinfile:
+     path: /etc/selinux/config
+     regexp: '^SELINUX='
+     line: SELINUX=disabled
+   register: selinux_is_enabled
+
+ - name: Disable SELinux
+   ansible.posix.selinux:
+     state: disabled
+   when: selinux_is_enabled.changed
+
+ - name: Reboot for appling SELinux settings
+   ansible.builtin.reboot:
+   when: selinux_is_enabled.changed
+
+
+ - name: Install IPA server, client, ntpd etc.
+   ansible.builtin.dnf:
+     name:
+       - freeipa-server-dns
+       - ipa-server
+       - freeipa-client
+       - chrony
+       - samba 
+     state: latest
+
+ - name: Enable ntpd server
+   ansible.builtin.systemd:
+    name: chronyd
+    enabled: yes
+    masked: no
+
+ - name: Run FreeIPA Role
+   ansible.builtin.include_role:
+    name: ipaserver
+
+ - name: Firewall
+   ansible.builtin.shell:
+     firewall-cmd --add-service={freeipa-ldap,freeipa-ldaps,dns,ntp}

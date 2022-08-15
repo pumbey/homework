@@ -1,0 +1,139 @@
+---
+ - name: Add signing key
+   ansible.builtin.rpm_key:
+     key: https://download.docker.com/linux/centos/gpg
+     state: present
+
+ - name: Add repository
+   ansible.builtin.yum_repository:
+     name: docker
+     description: Docker Repository
+     baseurl: "https://download.docker.com/linux/centos/$releasever/$basearch/stable"
+     enabled: true
+     gpgcheck: true
+     gpgkey: https://download.docker.com/linux/centos/gpg
+
+ - name: Epel
+   ansible.builtin.yum:
+     name:
+       - epel-release
+
+ - name: Install Docker
+   ansible.builtin.yum:
+     name:
+       - docker-ce
+       - docker-ce-cli
+       - containerd.io
+       - python3-docker
+     state: latest
+     update_cache: true
+
+ - name: Enable docker
+   ansible.builtin.systemd:
+     name: docker
+     state: started
+     enabled: yes
+     masked: no
+
+ - name: Create docker directories
+   ansible.builtin.file:
+     path: "{{ item }}"
+     state: directory
+     mode: 0755
+   loop:
+     - "{{ build_dir_path }}"
+     - "{{ build_dir_path }}/{{ distib }}"
+
+ - name: copy files to build dir
+   ansible.builtin.copy:
+     src: "{{ item }}"
+     dest: "{{ build_dir_path }}/{{ distib }}"
+   loop:
+     - "{{ role_path }}/files/opendkim-2.10.3.tar.gz"
+     - "{{ role_path }}/files/Dockerfile"
+     - "{{ role_path }}/files/starter.sh"
+
+ - name: Build image
+   community.docker.docker_image:
+     name: "{{ distib }}-{{ smtp_server_name }}"
+     source: build
+     build:
+       path: "{{ build_dir_path }}/{{ distib }}"
+     tag: latest
+     state: present
+
+ - name: Create mail container
+   community.docker.docker_container:
+     name: "{{ smtp_server_name }}"
+     image: "{{ distib }}-{{ smtp_server_name }}:latest" 
+     state: started
+     hostname: "{{ smtp_server_name }}"
+     domainname: "{{ domain_name }}"
+     dns_servers: "{{ dns_servers }}"
+     restart_policy: always
+     volumes:
+       - "{{ build_dir_path }}/{{ distib }}/postfix:/etc/postfix"
+       - "{{ build_dir_path }}/{{ distib }}/opendkim:/etc/opendkim"
+     ports:
+       - "{{ docker_bridge_if }}:{{ smtp_port }}:{{ smtp_port }}"
+
+
+ - name: Get OpenDKIM data
+   ansible.builtin.command: cat {{ build_dir_path }}/{{ distib }}/opendkim/mail.txt 
+   register: dkim_public_data
+
+ - name: get DKIM body for DNS
+   ansible.builtin.set_fact:
+     dkim_dns_data_row: "{{ dkim_public_data.stdout | replace('\t',' ') | replace('\n   ','') | regex_replace('\"','') | regex_search('\\(([^()]+)\\)','\\1') | replace('[','') | replace(']','') }}"
+
+ - name: A record
+   community.general.ipa_dnsrecord:
+     ipa_host: "{{ ipa_host_address }}"
+     ipa_pass: "{{ ipa_adm_pass }}"
+     state: present
+     zone_name: "{{ domain_name }}"
+     record_name: "{{ smtp_server_name }}.{{ domain_name }}"
+     record_value: "{{ ansible_default_ipv4.address }}"
+
+ - name: PTR record 
+#not working
+   community.general.ipa_dnsrecord:
+     ipa_host: "{{ ipa_host_address }}"
+     ipa_pass: "{{ ipa_adm_pass }}"
+     state: present
+     zone_name: "{{ ptr_record }}"
+     record_name: "prt_record_suffix"
+     record_type: "PTR"
+     record_value: "{{ smtp_server_name }}.{{ domain_name }}" 
+   ignore_errors: yes
+  
+ - name: MX record  
+   community.general.ipa_dnsrecord:
+     ipa_host: "{{ ipa_host_address }}"
+     ipa_pass: "{{ ipa_adm_pass }}"
+     state: present
+     zone_name: "{{ domain_name }}"
+     record_name: "@"
+     record_type: "MX"
+     record_value: "0 {{ smtp_server_name }}.{{ domain_name }}"
+
+ - name: TXT record
+   community.general.ipa_dnsrecord:
+     ipa_host: "{{ ipa_host_address }}"
+     ipa_pass: "{{ ipa_adm_pass }}"
+     state: present
+     zone_name: "{{ domain_name }}"
+     record_name: "{{ smtp_server_name }}._domainkey"
+     record_type: 'TXT'
+     record_value: "{{ dkim_dns_data_row[2:-2] }}"
+
+#no SPF dns records in modules
+ - name: Kinit 
+   ansible.builtin.shell:
+     echo "{{ ipa_adm_pass }}" | kinit admin
+
+ - name: Make SPF record
+   ansible.builtin.command: ipa dnsrecord-add "{{ domain_name }}" _spf --txt-data="v=spf1 ip4:"{{ ansible_default_ipv4.address }}" ~all"
+   ignore_errors: yes  
+
+
